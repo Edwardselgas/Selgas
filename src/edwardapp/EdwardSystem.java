@@ -4,22 +4,22 @@ package edwardapp;
 import java.util.Scanner;
 
 public class EdwardSystem {
-        public static void main(String[] args) {
+    public static void main(String[] args) {
         Scanner scan = new Scanner(System.in);
 
-        System.out.println("=== WELCOME TO EDWARD'S SERVICE PORTAL ===");
-        System.out.println("Select a service to begin:");
-        System.out.println("1. Banking Access");
-        System.out.println("2. Book Doctor Appointment");
-        System.out.println("3. Start Shopping");
+        System.out.println("Welcome to Edward’s Banking Services!");
+        System.out.println("What do you feel doing today?");
+        System.out.println("1. Banking");
+        System.out.println("2. Doctor Appointment");
+        System.out.println("3. Shopping");
 
-        System.out.print("Your option: ");
+        System.out.print("Enter choice: ");
         int userOption = scan.nextInt();
 
         switch (userOption) {
             case 1:
                 BankAccess loginPortal = new BankAccess();
-                loginPortal.authenticate(scan);
+                loginPortal.bankingMenu(scan);
                 break;
             case 2:
                 System.out.println("\n[Doctor Appointment] Not available at the moment.");

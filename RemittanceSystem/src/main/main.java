@@ -1,429 +1,341 @@
-package main;
+package Main;
 
-import config.config;
+import config.dbConnect;
 import java.util.Scanner;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID; // Used for a unique transaction ID
 
-public class main {
+public class Main {
 
-    // NOTE: For simplicity and to match the existing 'config' methods, 
-    // we assume the 'config' class can handle new table structures (tbl_senders, tbl_recipients)
-    // and correctly map object types (String, Double, Integer) to the database parameters.
+    
+    public static void viewRemittances() {
+        String Query = "SELECT r.remit_id, s.first_name AS sender_name, r.recipient_name, r.amount, r.fee, r.total_charge, DATE_FORMAT(r.remit_date, '%Y-%m-%d') as remit_date, r.status "
+                + "FROM tbl_remittances r "
+                + "JOIN tbl_senders s ON r.sender_id = s.sender_id";
+        
+        
+        String[] remitHeaders = {"Remit ID", "Sender Name", "Recipient Name", "Amount Sent", "Fee", "Total Charge", "Date", "Status"};
+        String[] remitColumns = {"remit_id", "sender_name", "recipient_name", "amount", "fee", "total_charge", "remit_date", "status"};
+        dbConnect conf = new dbConnect();
+        conf.viewRecords(Query, remitHeaders, remitColumns);
+    }
 
-    // --- MAIN METHOD ---
+    
+    public static void viewSenders() {
+        String Query = "SELECT * FROM tbl_senders";
+        
+       
+        String[] senderHeaders = {"Sender ID", "First Name", "Last Name", "Contact", "Email", "Address"};
+        String[] senderColumns = {"sender_id", "first_name", "last_name", "contact_num", "email_addr", "address"};
+        dbConnect conf = new dbConnect();
+        conf.viewRecords(Query, senderHeaders, senderColumns);
+    }
+    
+    // 👥 View Recipients (Mapped from original Pig/Inventory functions)
+    public static void viewRecipients() {
+        String Query = "SELECT recipient_id, full_name, contact_info, bank_details FROM tbl_recipients";
+        
+        String[] recipientHeaders = {"Recipient ID", "Full Name", "Contact Info", "Bank Details"};
+        String[] recipientColumns = {"recipient_id", "full_name", "contact_info", "bank_details"};
+        dbConnect conf = new dbConnect();
+        conf.viewRecords(Query, recipientHeaders, recipientColumns);
+    }
+
+   
+    public static void viewUsers() {
+        String Query = "SELECT * FROM tbl_user";
+        
+        String[] userHeaders = {"ID", "Name", "Email", "Type", "Status"};
+        String[] userColumns = {"u_id", "u_name", "u_email", "u_type", "u_status"};
+        dbConnect conf = new dbConnect();
+        conf.viewRecords(Query, userHeaders, userColumns);
+    }
+
+    
+    public static void addRecipient(Scanner sc, dbConnect con) {
+        System.out.println("\n--- ADD NEW RECIPIENT ---");
+        System.out.print("Enter Recipient Full Name: ");
+        sc.nextLine(); // Consume newline
+        String fullName = sc.nextLine();
+        System.out.print("Enter Contact Information: ");
+        String contactInfo = sc.next();
+        System.out.print("Enter Bank/Account Details: ");
+        sc.nextLine(); // Consume newline
+        String bankDetails = sc.nextLine();
+        
+        
+        String sql = "INSERT INTO tbl_recipients(full_name, contact_info, bank_details) VALUES (?, ?, ?)";
+        con.addRecord(sql, fullName, contactInfo, bankDetails);
+        System.out.println("✅ New Recipient added successfully.");
+    }
+    
+ 
+    public static void removeRecipient(Scanner sc, dbConnect con) {
+        System.out.println("\n--- REMOVE RECIPIENT ---");
+        viewRecipients();
+        System.out.print("Enter Recipient ID to remove (DELETE): ");
+        int recipientId = sc.nextInt();
+        
+        String sql = "DELETE FROM tbl_recipients WHERE recipient_id = ?";
+        con.deleteRecord(sql, recipientId);
+        System.out.println("❌ Recipient ID " + recipientId + " removed successfully.");
+    }
+
+    
+    public static void addRemittance(Scanner sc, dbConnect con) {
+        System.out.println("\n--- RECORD NEW REMITTANCE TRANSACTION ---");
+        
+        
+        viewSenders();
+        System.out.print("Enter Sender ID (or 0 to register new sender): ");
+        int senderId = sc.nextInt();
+        
+        if (senderId == 0) {
+            System.out.println("\n--- REGISTER NEW SENDER ---");
+            System.out.print("Enter First Name: ");
+            String fName = sc.next();
+            System.out.print("Enter Last Name: ");
+            String lName = sc.next();
+            System.out.print("Enter Contact Number: ");
+            String contact = sc.next();
+            System.out.print("Enter Email Address: ");
+            String email = sc.next();
+            System.out.print("Enter Address: ");
+            sc.nextLine(); // Consume newline
+            String address = sc.nextLine();
+            
+            // SQL INSERT for a new sender
+            String insertSenderSql = "INSERT INTO tbl_senders(first_name, last_name, contact_num, email_addr, address) VALUES (?, ?, ?, ?, ?)";
+            con.addRecord(insertSenderSql, fName, lName, contact, email, address);
+            
+            // Re-fetch the newly created sender ID (assuming auto-increment)
+            String fetchSenderIdSql = "SELECT sender_id FROM tbl_senders WHERE email_addr = ? ORDER BY sender_id DESC LIMIT 1";
+            List<Map<String, Object>> result = con.fetchRecords(fetchSenderIdSql, email);
+            if (!result.isEmpty()) {
+                senderId = (int) result.get(0).get("sender_id");
+            } else {
+                System.out.println("Error: Could not retrieve new sender ID. Transaction aborted.");
+                return;
+            }
+        }
+        
+        
+        System.out.print("Enter Recipient Name (Full Name): ");
+        sc.nextLine(); // Consume newline
+        String recipientName = sc.nextLine();
+        System.out.print("Enter Amount to Send: ");
+        double amount = sc.nextDouble();
+        System.out.print("Enter Transaction Fee: ");
+        double fee = sc.nextDouble();
+        
+        double totalCharge = amount + fee;
+        
+        System.out.println("Total Amount Charged (Amount + Fee): " + totalCharge);
+        System.out.print("Enter Status (e.g., Pending, Completed, Failed): ");
+        String status = sc.next();
+
+        
+        String saleSql = "INSERT INTO tbl_remittances(sender_id, recipient_name, amount, fee, total_charge, remit_date, status) VALUES (?, ?, ?, ?, ?, CURDATE(), ?)";
+        con.addRecord(saleSql, senderId, recipientName, amount, fee, totalCharge, status);
+        
+        System.out.println("✅ Remittance transaction recorded successfully.");
+    }
+    
+    
+    public static void deleteRemittance(Scanner sc, dbConnect con) {
+        System.out.println("\n--- DELETE REMITTANCE TRANSACTION ---");
+        viewRemittances();
+        System.out.print("Enter Remittance ID to delete: ");
+        int remitId = sc.nextInt();
+        
+        String sql = "DELETE FROM tbl_remittances WHERE remit_id = ?";
+        con.deleteRecord(sql, remitId);
+        System.out.println("❌ Remittance Transaction ID " + remitId + " deleted successfully.");
+    }
+
     public static void main(String[] args) {
-        // NOTE: The main Scanner is closed at the very end to prevent issues in recursive calls
+        dbConnect con = new dbConnect();
+        con.connectDB();
+        int choice;
+        char cont;
         Scanner sc = new Scanner(System.in);
-        config con = new config();
-        main app = new main();
-        String resp = null;
 
         do {
-            System.out.println("\n===== REMITTANCE MAIN MENU =====");
-            System.out.println("1. Login (Sender/Admin)");
-            System.out.println("2. Register New Sender");
+            System.out.println("\n===== REMITTANCE MANAGEMENT SYSTEM =====");
+            System.out.println("1. Login");
+            System.out.println("2. Register");
             System.out.println("3. Exit");
             System.out.print("Enter choice: ");
-            int choice = -1;
             
-            // Input validation for choice
+         
             if (sc.hasNextInt()) {
                 choice = sc.nextInt();
             } else {
                 System.out.println("Invalid input. Please enter a number.");
-                sc.next(); // consume the invalid input
-                continue;
+                sc.next(); 
+                choice = 0; 
             }
-            sc.nextLine(); // consume newline after nextInt
 
             switch (choice) {
-                case 1: // LOGIN
+                case 1:
+                    
                     System.out.print("Enter email: ");
-                    String email = sc.nextLine().trim();
+                    String em = sc.next();
                     System.out.print("Enter Password: ");
-                    String pass = sc.nextLine().trim();
-
-                    // 1. Try to log in as ADMIN (using the old tbl_users structure)
-                    String qryAdmin = "SELECT * FROM tbl_users WHERE u_email = ? AND u_pass = ? AND u_type = 'Admin'";
-                    List<Map<String, Object>> resultAdmin = con.fetchRecords(qryAdmin, email, pass);
+                    String pas = sc.next();
                     
-                    if (!resultAdmin.isEmpty()) {
-                        Map<String, Object> user = resultAdmin.get(0);
-                        String name = user.get("u_name").toString();
-                        System.out.println("✅ ADMIN LOGIN SUCCESS! Welcome, " + name);
-                        app.adminDashboard();
-                        break;
+                    while (true) {
+                        String qry = "SELECT * FROM tbl_user WHERE u_email = ? AND u_pass = ?";
+                        List<Map<String, Object>> result = con.fetchRecords(qry, em, pas);
+                        
+                        if (result.isEmpty()) {
+                            System.out.println("INVALID CREDENTIALS");
+                            break;
+                        } else {
+                            Map<String, Object> user = result.get(0);
+                            String stat = user.get("u_status").toString();
+                            String type = user.get("u_type").toString();
+                            
+                            if(stat.equals("Pending")){
+                                System.out.println("Account is Pending, Contact the Admin!");
+                                break;
+                            } else {
+                                System.out.println("LOGIN SUCCESS!");
+                                
+                                if(type.equals("Admin")){
+                                  
+                                    int adminChoice;
+                                    do {
+                                        System.out.println("\n--- ADMIN DASHBOARD ---");
+                                        System.out.println("1. View Remittance Transactions");
+                                        System.out.println("2. View Sender Records");
+                                        System.out.println("3. View Recipient Records");
+                                        System.out.println("4. Approve User Accounts (Management)");
+                                        System.out.println("5. Logout");
+                                        System.out.print("Enter choice: ");
+                                        
+                                        if (sc.hasNextInt()) {
+                                            adminChoice = sc.nextInt();
+                                        } else {
+                                            System.out.println("Invalid input. Please enter a number.");
+                                            sc.next();
+                                            adminChoice = 0;
+                                        }
+                                        
+                                        switch(adminChoice) {
+                                            case 1: viewRemittances(); break;
+                                            case 2: viewSenders(); break;
+                                            case 3: viewRecipients(); break;
+                                            case 4:
+                                                viewUsers();
+                                                System.out.print("Enter ID to Approve: ");
+                                                int ids = sc.nextInt();
+                                                String sql = "UPDATE tbl_user SET u_status = ? WHERE u_id = ?";
+                                                con.updateRecord(sql, "Approved", ids);
+                                                System.out.println("User ID " + ids + " approved.");
+                                                break;
+                                            case 5:
+                                                System.out.println("Logging out...");
+                                                break;
+                                            default:
+                                                System.out.println("Invalid choice.");
+                                        }
+                                    } while (adminChoice != 5);
+                                    
+                                } else if(type.equals("Staff")){ 
+                                    
+                                    int staffChoice;
+                                    do {
+                                        System.out.println("\n--- STAFF/OPERATOR DASHBOARD ---");
+                                        System.out.println("1. Record New Remittance Transaction");
+                                        System.out.println("2. View Remittance Transactions");
+                                        System.out.println("3. View Sender Records");
+                                        System.out.println("4. Add New Recipient");
+                                        System.out.println("5. Remove Recipient");
+                                        System.out.println("6. Delete Remittance Transaction (Correction)");
+                                        System.out.println("7. Logout");
+                                        System.out.print("Enter choice: ");
+                                        
+                                        if (sc.hasNextInt()) {
+                                            staffChoice = sc.nextInt();
+                                        } else {
+                                            System.out.println("Invalid input. Please enter a number.");
+                                            sc.next();
+                                            staffChoice = 0;
+                                        }
+                                        
+                                        switch(staffChoice) {
+                                            case 1: addRemittance(sc, con); break;
+                                            case 2: viewRemittances(); break;
+                                            case 3: viewSenders(); break;
+                                            case 4: addRecipient(sc, con); break;
+                                            case 5: removeRecipient(sc, con); break;
+                                            case 6: deleteRemittance(sc, con); break;
+                                            case 7:
+                                                System.out.println("Logging out...");
+                                                break;
+                                            default:
+                                                System.out.println("Invalid choice.");
+                                        }
+                                    } while (staffChoice != 7);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    break;
+
+                case 2:
+                    
+                    System.out.print("Enter user name: ");
+                    String name = sc.next();
+                    System.out.print("Enter user email: ");
+                    String email = sc.next();
+                    
+                  
+                    while (true) {
+                        String qry = "SELECT * FROM tbl_user WHERE u_email = ?";
+                        List<Map<String, Object>> result = con.fetchRecords(qry, email);
+
+                        if (result.isEmpty()) {
+                            break;
+                        } else {
+                            System.out.print("Email already exists, Enter other Email: ");
+                            email = sc.next();
+                        }
                     }
 
-                    // 2. Try to log in as SENDER (using the new tbl_senders structure)
-                    String qrySender = "SELECT * FROM tbl_senders WHERE Email = ? AND Password = ?";
-                    List<Map<String, Object>> resultSender = con.fetchRecords(qrySender, email, pass);
-                    
-                    if (!resultSender.isEmpty()) {
-                        Map<String, Object> sender = resultSender.get(0);
-                        String firstName = sender.get("FirstName").toString();
-                        String senderId = sender.get("SenderID").toString(); 
-
-                        System.out.println("✅ SENDER LOGIN SUCCESS! Welcome, " + firstName);
-                        app.senderDashboard(senderId);
-                    } else {
-                        System.out.println("❌ INVALID CREDENTIALS");
+                    System.out.print("Enter user Type (1 - Admin/2 -Staff): ");
+                    int type = sc.nextInt();
+                    while(type > 2 || type < 1){
+                        System.out.print("Invalid, choose between 1 & 2 only: ");
+                        type = sc.nextInt();
                     }
+                    String tp = (type == 1) ? "Admin" : "Staff";
+                    
+                    System.out.print("Enter Password: ");
+                    String pass = sc.next();
+                    
+                   
+                    String sql = "INSERT INTO tbl_user(u_name, u_email, u_type, u_status, u_pass) VALUES (?, ?, ?, ?, ?)";
+                    con.addRecord(sql, name, email, tp, "Pending", pass);
+                    System.out.println("Registration successful. Your account is pending admin approval.");
                     break;
 
-                case 2: // REGISTER NEW SENDER
-                    app.registerNewSender(sc, con);
-                    break;
-
-                case 3: // EXIT
-                    System.out.println("Exiting program... Goodbye! 👋");
-                    sc.close();
-                    return;
-
-                default:
-                    System.out.println("Invalid choice.");
-                    break;
-            }
-
-            System.out.print("\nDo you want to return to the MAIN MENU? (yes/no): ");
-            resp = sc.nextLine();
-
-        } while (resp.equalsIgnoreCase("yes"));
-
-        System.out.println("Thank you for using the Remittance Service. Program ended. 💰");
-        sc.close();
-    }
-    
-    // -------------------------------------------------------------
-    // --- HELPER REGISTRATION FUNCTION (SENDER) ---
-    // -------------------------------------------------------------
-    public void registerNewSender(Scanner sc, config con) {
-        System.out.println("\n--- NEW SENDER REGISTRATION ---");
-        
-        System.out.print("Enter First Name: ");
-        String firstName = sc.nextLine();
-        System.out.print("Enter Last Name: ");
-        String lastName = sc.nextLine();
-        System.out.print("Enter Address: ");
-        String address = sc.nextLine();
-        System.out.print("Enter Country: ");
-        String country = sc.nextLine();
-        
-        String newEmail;
-        // VALIDATION: check if email exists in tbl_senders
-        while (true) {
-            System.out.print("Enter user email: ");
-            newEmail = sc.nextLine().trim();
-            String checkQry = "SELECT * FROM tbl_senders WHERE Email = ?";
-            List<Map<String, Object>> exists = con.fetchRecords(checkQry, newEmail);
-            if (exists.isEmpty()) {
-                break;
-            } else {
-                System.out.println("Email already exists. Enter a different email.");
-            }
-        }
-        
-        System.out.print("Enter Contact Phone: ");
-        String phone = sc.nextLine();
-        System.out.print("Enter desired Password: ");
-        String newPass = sc.nextLine(); 
-        
-        String kycStatus = "Pending"; // Default Status
-        
-        // Conceptual SQL: Insert into tbl_senders
-        String sql = "INSERT INTO tbl_senders (FirstName, LastName, Address, Country, Email, Phone, KYCStatus, Password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        // Pass 8 parameters, excluding the auto-generated SenderID:
-        con.addRecord(sql, firstName, lastName, address, country, newEmail, phone, kycStatus, newPass); 
-
-        System.out.println("✅ Registration successful! Please log in.");
-    }
-
-    // -------------------------------------------------------------
-    // --- ADMIN DASHBOARD ---
-    // -------------------------------------------------------------
-    public void adminDashboard() {
-        Scanner sc = new Scanner(System.in);
-        int choice = 0; 
-        do {
-            System.out.println("\n===== ADMIN DASHBOARD =====");
-            System.out.println("1. Manage Senders");
-            System.out.println("2. View All Remittance Transactions");
-            System.out.println("3. Exit to Main Menu");
-            System.out.print("Enter choice: ");
-            
-            if (sc.hasNextInt()) {
-                choice = sc.nextInt();
-            } else {
-                System.out.println("Invalid input. Please enter a number.");
-                sc.next();  
-                continue;
-            }
-            sc.nextLine(); // consume newline
-
-            switch (choice) {
-                case 1:
-                    manageSenders();
-                    break;
-                case 2:
-                    viewAllTransactions();
-                    break;
                 case 3:
-                    System.out.println("Returning to Main Menu...");
+                    System.out.println("Exiting program...");
+                    System.exit(0);
                     break;
+
                 default:
                     System.out.println("Invalid choice.");
-                    break;
             }
-        } while (choice != 3);
-    }
-    
-    // -------------------------------------------------------------
-    // --- SENDER MANAGEMENT (Replacing generic User Management for Admin) ---
-    // -------------------------------------------------------------
-    public void manageSenders() {
-        Scanner sc = new Scanner(System.in);
-        int userChoice = 0; 
 
-        do {
-            System.out.println("\n===== SENDER MANAGEMENT MENU =====");
-            System.out.println("1. View All Senders");
-            System.out.println("2. Update Sender KYC Status");
-            System.out.println("3. Back");
-            System.out.print("Enter choice: ");
-            
-            if (sc.hasNextInt()) {
-                userChoice = sc.nextInt();
-            } else {
-                System.out.println("Invalid input. Please enter a number.");
-                sc.next();
-                continue;
-            }
-            sc.nextLine(); 
+            System.out.print("\nDo you want to continue in Main Menu? (Y/N): ");
+            cont = sc.next().charAt(0);
 
-            switch (userChoice) {
-                case 1:
-                    viewSenders();
-                    break;
-                case 2:
-                    viewSenders(); // Show list before asking for ID
-                    updateSenderKyc();
-                    break;
-                case 3:
-                    System.out.println("Going back to Admin Dashboard...");
-                    break;
-                default:
-                    System.out.println("Invalid choice.");
-                    break;
-            }
-        } while (userChoice != 3);
-    }
+        } while (cont == 'Y' || cont == 'y');
 
-    public void viewSenders() {
-        System.out.println("\n--- CURRENT SYSTEM SENDERS ---");
-        // Query matching the conceptual tbl_senders fields
-        String qry = "SELECT SenderID, FirstName, LastName, Country, Email, Phone, KYCStatus FROM tbl_senders";
-        
-        String[] hdrs = {"ID", "First Name", "Last Name", "Country", "Email", "Phone", "KYC Status"};
-        String[] clms = {"SenderID", "FirstName", "LastName", "Country", "Email", "Phone", "KYCStatus"}; 
-
-        config conf = new config();
-        conf.viewRecords(qry, hdrs, clms);
-    }
-
-    public void updateSenderKyc() {
-        Scanner sc = new Scanner(System.in);
-        config conf = new config();
-
-        System.out.print("Enter Sender ID to Update KYC Status: ");
-        int id;
-        if (sc.hasNextInt()) {
-            id = sc.nextInt(); 
-        } else {
-            System.out.println("Invalid ID format. Update cancelled.");
-            sc.next();
-            return;
-        }
-        sc.nextLine(); 
-
-        System.out.print("New KYC Status (e.g., Verified, Pending, Rejected): ");
-        String kycStatus = sc.nextLine();
-
-        String qry = "UPDATE tbl_senders SET KYCStatus = ? WHERE SenderID = ?";
-        conf.updateRecord(qry, kycStatus, id); 
-        System.out.println("✅ Sender ID " + id + "'s KYC Status updated to " + kycStatus + ".");
-    }
-    
-    // -------------------------------------------------------------
-    // --- SENDER DASHBOARD ---
-    // -------------------------------------------------------------
-    public void senderDashboard(String senderId) {
-        Scanner sc = new Scanner(System.in);
-        int choice = 0; 
-        do {
-            System.out.println("\n===== SENDER DASHBOARD =====");
-            System.out.println("1. Send New Remittance 💸");
-            System.out.println("2. View My Transactions");
-            System.out.println("3. Log out");
-            System.out.print("Enter choice: ");
-            
-            if (sc.hasNextInt()) {
-                choice = sc.nextInt();
-            } else {
-                System.out.println("Invalid input. Please enter a number.");
-                sc.next();  
-                continue;
-            }
-            sc.nextLine(); // consume newline
-
-            switch (choice) {
-                case 1:
-                    sendRemittance(senderId); // Functionality for sending money
-                    break;
-                case 2:
-                    viewMyTransactions(senderId); // Functionality for viewing own history
-                    break;
-                case 3:
-                    System.out.println("Logging out...");
-                    break;
-                default:
-                    System.out.println("Invalid choice.");
-                    break;
-            }
-        } while (choice != 3);
-    }
-
-    // -------------------------------------------------------------
-    // --- REMITTANCE TRANSACTION FUNCTIONS ---
-    // -------------------------------------------------------------
-
-    public void sendRemittance(String senderId) {
-        Scanner sc = new Scanner(System.in);
-        config conf = new config();
-        
-        System.out.println("\n--- NEW REMITTANCE ---");
-
-        // --- RECIPIENT DETAILS COLLECTION ---
-        System.out.print("Enter Recipient First Name: ");
-        String r_firstName = sc.nextLine();
-        System.out.print("Enter Recipient Last Name: ");
-        String r_lastName = sc.nextLine();
-        System.out.print("Enter Recipient Bank Name: ");
-        String r_bankName = sc.nextLine();
-        System.out.print("Enter Recipient Account Number: ");
-        String r_accountNumber = sc.nextLine();
-        System.out.print("Enter Recipient Country: ");
-        String r_country = sc.nextLine();
-        System.out.print("Enter Recipient Pickup Method (e.g., Cash, Bank Transfer, Mobile Wallet): ");
-        String r_pickupMethod = sc.nextLine();
-        
-        // --- FIX: Use a less restrictive check and handle ID retrieval better ---
-        // Check if Recipient exists by Account Number (since Name could be changed later)
-        String checkRecipientQry = "SELECT RecipientID FROM tbl_recipients WHERE AccountNumber = ?";
-        List<Map<String, Object>> existingRecipient = conf.fetchRecords(checkRecipientQry, r_accountNumber);
-        
-        String recipientId;
-        if (existingRecipient.isEmpty()) {
-            // Recipient does not exist, so insert new record
-            System.out.println("Recipient not found. Registering new recipient...");
-            
-            String insertRecipientSql = "INSERT INTO tbl_recipients (FirstName, LastName, BankName, AccountNumber, Country, PickupMethod) VALUES (?, ?, ?, ?, ?, ?)";
-            conf.addRecord(insertRecipientSql, r_firstName, r_lastName, r_bankName, r_accountNumber, r_country, r_pickupMethod);
-            
-            // Re-query to get the new RecipientID. This handles the IndexOutOfBoundsException.
-            List<Map<String, Object>> newRecipient = conf.fetchRecords(checkRecipientQry, r_accountNumber);
-
-            if (newRecipient.isEmpty()) {
-                 // This usually means the INSERT failed, or the re-query is too fast for the DB commit.
-                 System.out.println("❌ CRITICAL ERROR: Failed to retrieve new Recipient ID after insert. Transaction cancelled.");
-                 return;
-            }
-            
-            // Assuming RecipientID is the correct column name in the DB now.
-            recipientId = newRecipient.get(0).get("RecipientID").toString();
-            System.out.println("New Recipient Registered. ID: " + recipientId);
-
-        } else {
-            // Recipient Found.
-            recipientId = existingRecipient.get(0).get("RecipientID").toString();
-            System.out.println("Recipient Found. ID: " + recipientId);
-        }
-
-        // --- TRANSACTION DETAILS COLLECTION ---
-        System.out.print("Enter Amount to Send: ");
-        double amountSent = 0.0;
-        if (sc.hasNextDouble()) {
-            amountSent = sc.nextDouble();
-        } else {
-            System.out.println("Invalid amount entered. Transaction cancelled.");
-            sc.nextLine(); 
-            return;
-        }
-        sc.nextLine(); 
-
-        System.out.print("Enter Currency Sent (e.g., USD): ");
-        String currencySent = sc.nextLine().toUpperCase();
-        System.out.print("Enter Expected Amount Received (after fees/exchange): ");
-        double amountReceived = 0.0;
-        if (sc.hasNextDouble()) {
-            amountReceived = sc.nextDouble();
-        } else {
-            System.out.println("Invalid received amount entered. Transaction cancelled.");
-            sc.nextLine(); 
-            return;
-        }
-        sc.nextLine(); 
-        System.out.print("Enter Currency Received (e.g., PHP): ");
-        String currencyReceived = sc.nextLine().toUpperCase();
-        
-        // Simplified calculation for demo
-        double exchangeRate = amountReceived / amountSent;
-        double feeCharged = amountSent - (amountReceived / exchangeRate); 
-        
-        System.out.print("Enter Payment Method (e.g., Card, Bank Debit): ");
-        String paymentMethod = sc.nextLine();
-        
-        // --- LOGGING TRANSACTION ---
-        String transactionId = UUID.randomUUID().toString().substring(0, 8).toUpperCase();  
-        String transactionStatus = "Pending";
-        String transferDate = new java.util.Date().toString(); 
-
-        // Conceptual SQL for 'tbl_transactions'
-        String sql = "INSERT INTO tbl_transactions (TransactionID, SenderID, RecipientID, AmountSent, CurrencySent, AmountReceived, CurrencyReceived, ExchangeRate, FeeCharged, TransferDate, Status, PaymentMethod) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        // Pass 12 parameters (assuming config.addRecord can handle this many)
-        conf.addRecord(sql, 
-            transactionId, senderId, recipientId, amountSent, currencySent, amountReceived, 
-            currencyReceived, exchangeRate, feeCharged, transferDate, transactionStatus, paymentMethod);
-        
-        System.out.println("✅ Remittance of " + String.format("%.2f %s", amountSent, currencySent) + " sent successfully!");
-        System.out.println("Expected Recipient Amount: " + String.format("%.2f %s", amountReceived, currencyReceived));
-        System.out.println("Your Transaction ID is: " + transactionId);
-    }
-
-    public void viewMyTransactions(String senderId) {
-        System.out.println("\n--- MY REMITTANCE HISTORY ---");
-        // Joining tbl_transactions with tbl_recipients to show Recipient details
-        String qry = "SELECT t.TransactionID, r.FirstName, r.LastName, t.AmountSent, t.CurrencySent, t.AmountReceived, t.CurrencyReceived, t.Status, t.TransferDate FROM tbl_transactions t JOIN tbl_recipients r ON t.RecipientID = r.RecipientID WHERE t.SenderID = '" + senderId + "'";
-        
-        String[] hdrs = {"ID", "R_First Name", "R_Last Name", "Sent Amt", "Sent Curr", "Rec'd Amt", "Rec'd Curr", "Status", "Date"};
-        String[] clms = {"TransactionID", "FirstName", "LastName", "AmountSent", "CurrencySent", "AmountReceived", "CurrencyReceived", "Status", "TransferDate"};
-
-        config conf = new config();
-        conf.viewRecords(qry, hdrs, clms); 
-    }
-    
-    public void viewAllTransactions() {
-        System.out.println("\n--- ALL REMITTANCE TRANSACTIONS ---");
-        // Conceptual JOIN query to get Sender Name and Recipient Name
-        String qry = "SELECT t.TransactionID, s.FirstName as SenderName, r.FirstName || ' ' || r.LastName as RecipientName, t.AmountSent, t.CurrencySent, t.Status FROM tbl_transactions t JOIN tbl_senders s ON t.SenderID = s.SenderID JOIN tbl_recipients r ON t.RecipientID = r.RecipientID";
-        
-        String[] hdrs = {"ID", "Sender", "Recipient", "Amount Sent", "Currency", "Status"};
-        String[] clms = {"TransactionID", "SenderName", "RecipientName", "AmountSent", "CurrencySent", "Status"};
-
-        config conf = new config();
-        conf.viewRecords(qry, hdrs, clms);  
+        System.out.println("Thank you! Program ended.");
     }
 }
